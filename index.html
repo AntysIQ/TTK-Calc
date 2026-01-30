@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced TTK & DPS Calculator</title>
+    <title>TTK Calculator</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #0f172a 0%, #020617 100%);
@@ -136,10 +136,9 @@
 
         /* --- Results Grid --- */
         .results-container {
-            display: none; /* Hidden by default */
+            display: grid; /* Always visible */
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
-            animation: fadeIn 0.4s ease-out;
         }
 
         .stat-card {
@@ -149,7 +148,10 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            transition: transform 0.3s ease;
         }
+        
+        .stat-card:hover { transform: translateY(-3px); }
 
         .stat-card.head { border-top: 4px solid var(--c-head); }
         .stat-card.body { border-top: 4px solid var(--c-body); }
@@ -168,13 +170,27 @@
             align-items: center;
         }
         
+        .header-stats {
+            display: flex;
+            gap: 10px;
+            font-size: 0.75rem;
+            opacity: 0.9;
+            color: #fff;
+        }
+
         .head .card-header { color: var(--c-head); }
         .body .card-header { color: var(--c-body); }
         .limb .card-header { color: var(--c-limb); }
 
         .card-body { padding: 20px; flex-grow: 1; }
 
-        /* Data Rows */
+        /* Data Groups to Fix Double Border */
+        .data-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Border Logic */
         .data-row {
             display: flex;
             justify-content: space-between;
@@ -183,20 +199,24 @@
             padding-bottom: 12px;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
-        .data-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        
+        /* Remove border from last item in a group */
+        .data-group .data-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        /* Divider between groups */
+        .group-divider {
+            margin: 15px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            width: 100%;
+        }
 
         .data-label { font-size: 0.8rem; color: var(--text-muted); }
         .data-val { font-size: 1rem; font-weight: 600; color: #fff; text-align: right; }
         .data-sub { font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 2px; }
-
-        .highlight { color: #fff; font-size: 1.2rem; }
-
-        .missing-msg {
-            padding: 40px;
-            text-align: center;
-            color: var(--text-muted);
-            font-style: italic;
-        }
 
         .footer {
             margin-top: 40px;
@@ -212,7 +232,6 @@
         }
 
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -267,11 +286,10 @@
                 </div>
             </div>
 
-            <button onclick="calculateAll()">Analyze Performance</button>
+            <button onclick="calculateAll()">Calc</button>
         </div>
 
-        <div id="output" class="results-container">
-            </div>
+        <div id="output" class="results-container"></div>
 
         <div class="footer">
             &copy; 2026 <span id="author">AntysIQ</span>. All Rights Reserved.
@@ -281,55 +299,60 @@
 
     <script>
         // --- Helper: Format Numbers ---
-        const fmt = (n) => n.toFixed(2);
-        const fmtTime = (n) => n.toFixed(4) + 's';
+        const fmt = (n) => typeof n === 'number' ? n.toFixed(2) : n;
+        const fmtTime = (n) => typeof n === 'number' ? n.toFixed(4) + 's' : n;
+
+        // Placeholder data
+        const PLACEHOLDER_DATA = {
+            shots: '-', 
+            reloads: '-',
+            dpm: '-', dpsBurst: '-', dpsSusFull: '-', dpsSusTac: '-',
+            baseTTK: '-', ttkFull: '-', ttkTac: '-', 
+            isPlaceholder: true,
+            needsReload: false
+        };
 
         function calculateMetrics(health, damage, mag, rpm, fullR, tacR) {
             // Check missing damage
-            if (!damage || isNaN(damage)) return null;
+            if (!damage || isNaN(damage)) return PLACEHOLDER_DATA;
 
             // 1. Basic Calculation
             let shots = Math.ceil(health / damage);
             let cycleTime = 60 / rpm;
             
-            // DPM (Damage Per Mag)
+            // DPM & DPS
             let dpm = damage * mag;
-
-            // DPS (Burst - No Reload)
             let dpsBurst = damage * (rpm / 60);
-
-            // DPS Sustained (Formula: DPM / (Time to dump mag + Reload time))
-            // Time to dump mag = (MagSize) * CycleTime? 
-            // Standard convention is usually MagSize / (RPM/60).
             let dumpTime = mag / (rpm / 60);
-            
             let dpsSustainedFull = fullR ? (dpm / (dumpTime + fullR)) : 0;
             let dpsSustainedTac = tacR ? (dpm / (dumpTime + tacR)) : 0;
 
-            // 2. TTK Calculation
+            // 2. Base TTK (No reload considered yet)
             let baseTime = (shots - 1) * cycleTime;
             
             let result = {
                 shots: shots,
+                reloads: 0,
                 dpm: dpm,
                 dpsBurst: dpsBurst,
                 dpsSusFull: dpsSustainedFull,
                 dpsSusTac: dpsSustainedTac,
-                reloads: 0,
-                ttkNoReload: 0,
-                ttkFull: 0,
-                ttkTac: 0,
-                needsReload: false
+                
+                baseTTK: baseTime,
+                ttkFull: null, // Null indicates not applicable (no reload needed)
+                ttkTac: null,
+                
+                needsReload: false,
+                isPlaceholder: false
             };
 
-            if (shots <= mag) {
-                result.ttkNoReload = baseTime;
-            } else {
+            // 3. Reload Logic
+            if (shots > mag) {
                 result.needsReload = true;
                 result.reloads = Math.floor((shots - 1) / mag);
                 let timeLost = result.reloads * cycleTime;
                 
-                // Calculate both if inputs exist
+                // Add reload times if input exists
                 if (fullR) result.ttkFull = baseTime - timeLost + (fullR * result.reloads);
                 if (tacR) result.ttkTac = baseTime - timeLost + (tacR * result.reloads);
             }
@@ -338,79 +361,101 @@
         }
 
         function generateCard(title, className, data, fullR, tacR) {
-            if (!data) {
-                return `
-                <div class="stat-card ${className}">
-                    <div class="card-header">${title}</div>
-                    <div class="missing-msg">Missing Damage Input</div>
-                </div>`;
+            // -- Helpers --
+            let valFullDPS = (data.dpsSusFull && data.dpsSusFull !== '-') ? fmt(data.dpsSusFull) : '-';
+            let valTacDPS  = (data.dpsSusTac && data.dpsSusTac !== '-') ? fmt(data.dpsSusTac) : '-';
+
+            // Base TTK
+            let tBase = (data.baseTTK !== '-') ? fmtTime(data.baseTTK) : '-';
+
+            // Reload TTK Logic
+            let tFull = '-';
+            let tTac = '-';
+
+            if (!data.isPlaceholder) {
+                if (data.needsReload) {
+                    // We need a reload
+                    if (data.ttkFull) {
+                        tFull = fmtTime(data.ttkFull);
+                    } else if (!fullR) {
+                        tFull = '<span style="color:#f87171">Input Req.</span>';
+                    }
+
+                    if (data.ttkTac) {
+                        tTac = fmtTime(data.ttkTac);
+                    } else if (!tacR) {
+                        tTac = '<span style="color:#f87171">Input Req.</span>';
+                    }
+                } else {
+                    // No reload needed -> Keep as '-'
+                    tFull = '-';
+                    tTac = '-';
+                }
             }
-
-            // TTK Section Construction
-            let ttkHTML = '';
-            if (!data.needsReload) {
-                ttkHTML = `
-                <div class="data-row">
-                    <span class="data-label">TTK</span>
-                    <span class="data-val highlight">${fmtTime(data.ttkNoReload)}</span>
-                </div>`;
-            } else {
-                // Check if reloads exist
-                let fullStr = fullR ? fmtTime(data.ttkFull) : '<span style="color:#f87171">N/A</span>';
-                let tacStr = tacR ? fmtTime(data.ttkTac) : '<span style="color:#f87171">N/A</span>';
-
-                ttkHTML = `
-                <div class="data-row">
-                    <span class="data-label">Reloads Needed</span>
-                    <span class="data-val" style="color:#f87171">${data.reloads}</span>
-                </div>
-                <div class="data-row">
-                    <span class="data-label">TTK (Full Reload)</span>
-                    <div style="text-align:right">
-                        <span class="data-val">${fullStr}</span>
-                    </div>
-                </div>
-                <div class="data-row">
-                    <span class="data-label">TTK (Tac Reload)</span>
-                    <div style="text-align:right">
-                        <span class="data-val">${tacStr}</span>
-                    </div>
-                </div>`;
-            }
-
-            // DPS Section Construction
-            let susFullStr = fullR ? fmt(data.dpsSusFull) : '-';
-            let susTacStr = tacR ? fmt(data.dpsSusTac) : '-';
 
             return `
             <div class="stat-card ${className}">
                 <div class="card-header">
-                    ${title}
-                    <span style="font-size:0.75rem; opacity:0.7">${data.shots} Shots</span>
+                    <span>${title}</span>
+                    <div class="header-stats">
+                        <span>${data.shots} Shots</span>
+                        <span style="opacity:0.5">|</span>
+                        <span style="color:${(data.reloads > 0) ? '#f87171' : 'inherit'}">${data.reloads} Reloads</span>
+                    </div>
                 </div>
                 <div class="card-body">
-                    ${ttkHTML}
                     
-                    <div style="margin: 15px 0; border-bottom:1px solid rgba(255,255,255,0.1)"></div>
+                    <div class="data-group">
+                        <div class="data-row">
+                            <span class="data-label">TTK</span>
+                            <span class="data-val" style="font-size:1.2rem">${tBase}</span>
+                        </div>
 
-                    <div class="data-row">
-                        <span class="data-label">Damage / Mag</span>
-                        <span class="data-val">${data.dpm}</span>
+                        <div class="data-row">
+                            <span class="data-label">TTK (Full Reload)</span>
+                            <div style="text-align:right">
+                                <span class="data-val">${tFull}</span>
+                            </div>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">TTK (Tac Reload)</span>
+                            <div style="text-align:right">
+                                <span class="data-val">${tTac}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="data-row">
-                        <span class="data-label">Burst DPS <br><span class="data-sub">(No Reload)</span></span>
-                        <span class="data-val">${fmt(data.dpsBurst)}</span>
+                    
+                    <div class="group-divider"></div>
+
+                    <div class="data-group">
+                        <div class="data-row">
+                            <span class="data-label">Damage / Mag</span>
+                            <span class="data-val">${data.dpm}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Burst DPS <br><span class="data-sub">(No Reload)</span></span>
+                            <span class="data-val">${fmt(data.dpsBurst)}</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Sustained DPS <br><span class="data-sub">(Full / Tac)</span></span>
+                            <span class="data-val">${valFullDPS} <span style="color:#666">/</span> ${valTacDPS}</span>
+                        </div>
                     </div>
-                    <div class="data-row">
-                        <span class="data-label">Sustained DPS <br><span class="data-sub">(Full / Tac)</span></span>
-                        <span class="data-val">${susFullStr} <span style="color:#666">/</span> ${susTacStr}</span>
-                    </div>
+
                 </div>
             </div>`;
         }
 
+        function render(head, body, limb, fullR, tacR) {
+             let outputDiv = document.getElementById('output');
+             outputDiv.innerHTML = `
+                ${generateCard('Headshot', 'head', head, fullR, tacR)}
+                ${generateCard('Bodyshot', 'body', body, fullR, tacR)}
+                ${generateCard('Limbshot', 'limb', limb, fullR, tacR)}
+            `;
+        }
+
         function calculateAll() {
-            // Inputs
             let h = parseFloat(document.getElementById('health').value);
             let mag = parseFloat(document.getElementById('magsize').value);
             let rpm = parseFloat(document.getElementById('rpm').value);
@@ -422,30 +467,25 @@
             let dLimb = parseFloat(document.getElementById('limbDamage').value);
 
             let errorBox = document.getElementById('globalError');
-            let outputDiv = document.getElementById('output');
 
-            // Validation
             if (!h || !mag || !rpm) {
                 errorBox.style.display = 'block';
-                errorBox.innerText = "Please enter Health, RPM, and Magazine Size.";
-                outputDiv.style.display = 'none';
+                errorBox.innerText = "Please enter Health, RPM, and Magazine Size to calculate.";
+                render(PLACEHOLDER_DATA, PLACEHOLDER_DATA, PLACEHOLDER_DATA, null, null);
                 return;
             }
             errorBox.style.display = 'none';
 
-            // Calculations
             let headData = calculateMetrics(h, dHead, mag, rpm, fullR, tacR);
             let bodyData = calculateMetrics(h, dBody, mag, rpm, fullR, tacR);
             let limbData = calculateMetrics(h, dLimb, mag, rpm, fullR, tacR);
 
-            // Render
-            outputDiv.style.display = 'grid';
-            outputDiv.innerHTML = `
-                ${generateCard('Headshot', 'head', headData, fullR, tacR)}
-                ${generateCard('Bodyshot', 'body', bodyData, fullR, tacR)}
-                ${generateCard('Limbshot', 'limb', limbData, fullR, tacR)}
-            `;
+            render(headData, bodyData, limbData, fullR, tacR);
         }
+
+        window.onload = function() {
+            render(PLACEHOLDER_DATA, PLACEHOLDER_DATA, PLACEHOLDER_DATA, null, null);
+        };
     </script>
 </body>
 </html>

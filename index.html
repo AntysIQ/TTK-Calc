@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced TTK & DPS Calculator</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            --card-bg: rgba(30, 41, 59, 0.6);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.2);
+            --input-bg: rgba(15, 23, 42, 0.6);
+            
+            /* Body Part Colors */
+            --c-head: #f87171; /* Red */
+            --c-body: #60a5fa; /* Blue */
+            --c-limb: #a78bfa; /* Purple */
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Inter, system-ui, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        /* --- Header & Inputs --- */
+        .glass-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: var(--glass-border);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .input-section {
+            display: grid;
+            gap: 20px;
+        }
+
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+        }
+
+        input {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background-color: rgba(15, 23, 42, 0.9);
+        }
+
+        /* Color coded inputs */
+        #headDamage:focus { border-color: var(--c-head); box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2); }
+        #bodyDamage:focus { border-color: var(--c-body); box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2); }
+        #limbDamage:focus { border-color: var(--c-limb); box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2); }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px var(--accent-glow); }
+
+        /* --- Error Box --- */
+        .error-box {
+            background: rgba(248, 113, 113, 0.1);
+            border: 1px solid var(--c-head);
+            color: var(--c-head);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        /* --- Results Grid --- */
+        .results-container {
+            display: none; /* Hidden by default */
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .stat-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-card.head { border-top: 4px solid var(--c-head); }
+        .stat-card.body { border-top: 4px solid var(--c-body); }
+        .stat-card.limb { border-top: 4px solid var(--c-limb); }
+
+        .card-header {
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .head .card-header { color: var(--c-head); }
+        .body .card-header { color: var(--c-body); }
+        .limb .card-header { color: var(--c-limb); }
+
+        .card-body { padding: 20px; flex-grow: 1; }
+
+        /* Data Rows */
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .data-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+        .data-label { font-size: 0.8rem; color: var(--text-muted); }
+        .data-val { font-size: 1rem; font-weight: 600; color: #fff; text-align: right; }
+        .data-sub { font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 2px; }
+
+        .highlight { color: #fff; font-size: 1.2rem; }
+
+        .missing-msg {
+            padding: 40px;
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .footer {
+            margin-top: 40px;
+            font-size: 0.75rem;
+            color: rgba(148, 163, 184, 0.5);
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid-3 { grid-template-columns: 1fr; }
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <div class="glass-panel">
+            <h1>TTK Calculator</h1>
+            
+            <div id="globalError" class="error-box"></div>
+
+            <div class="input-section">
+                <div class="grid-3">
+                    <div>
+                        <label>Target Health</label>
+                        <input type="number" id="health" placeholder="150">
+                    </div>
+                    <div>
+                        <label>RPM (Fire Rate)</label>
+                        <input type="number" id="rpm" placeholder="800">
+                    </div>
+                    <div>
+                        <label>Mag Size</label>
+                        <input type="number" id="magsize" placeholder="30">
+                    </div>
+                </div>
+
+                <div class="grid-3">
+                    <div>
+                        <label style="color:var(--c-head)">Head Damage</label>
+                        <input type="number" id="headDamage" placeholder="48">
+                    </div>
+                    <div>
+                        <label style="color:var(--c-body)">Body Damage</label>
+                        <input type="number" id="bodyDamage" placeholder="24">
+                    </div>
+                    <div>
+                        <label style="color:var(--c-limb)">Limb Damage</label>
+                        <input type="number" id="limbDamage" placeholder="18">
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div>
+                        <label>Full Reload (s)</label>
+                        <input type="number" id="fullReload" placeholder="Empty Mag">
+                    </div>
+                    <div>
+                        <label>Tac Reload (s)</label>
+                        <input type="number" id="tacReload" placeholder="Partial Mag">
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="calculateAll()">Analyze Performance</button>
+        </div>
+
+        <div id="output" class="results-container">
+            </div>
+
+        <div class="footer">
+            &copy; 2026 <span id="author">AntysIQ</span>. All Rights Reserved.
+        </div>
+
+    </div>
+
+    <script>
+        // --- Helper: Format Numbers ---
+        const fmt = (n) => n.toFixed(2);
+        const fmtTime = (n) => n.toFixed(4) + 's';
+
+        function calculateMetrics(health, damage, mag, rpm, fullR, tacR) {
+            // Check missing damage
+            if (!damage || isNaN(damage)) return null;
+
+            // 1. Basic Calculation
+            let shots = Math.ceil(health / damage);
+            let cycleTime = 60 / rpm;
+            
+            // DPM (Damage Per Mag)
+            let dpm = damage * mag;
+
+            // DPS (Burst - No Reload)
+            let dpsBurst = damage * (rpm / 60);
+
+            // DPS Sustained (Formula: DPM / (Time to dump mag + Reload time))
+            // Time to dump mag = (MagSize) * CycleTime? 
+            // Standard convention is usually MagSize / (RPM/60).
+            let dumpTime = mag / (rpm / 60);
+            
+            let dpsSustainedFull = fullR ? (dpm / (dumpTime + fullR)) : 0;
+            let dpsSustainedTac = tacR ? (dpm / (dumpTime + tacR)) : 0;
+
+            // 2. TTK Calculation
+            let baseTime = (shots - 1) * cycleTime;
+            
+            let result = {
+                shots: shots,
+                dpm: dpm,
+                dpsBurst: dpsBurst,
+                dpsSusFull: dpsSustainedFull,
+                dpsSusTac: dpsSustainedTac,
+                reloads: 0,
+                ttkNoReload: 0,
+                ttkFull: 0,
+                ttkTac: 0,
+                needsReload: false
+            };
+
+            if (shots <= mag) {
+                result.ttkNoReload = baseTime;
+            } else {
+                result.needsReload = true;
+                result.reloads = Math.floor((shots - 1) / mag);
+                let timeLost = result.reloads * cycleTime;
+                
+                // Calculate both if inputs exist
+                if (fullR) result.ttkFull = baseTime - timeLost + (fullR * result.reloads);
+                if (tacR) result.ttkTac = baseTime - timeLost + (tacR * result.reloads);
+            }
+
+            return result;
+        }
+
+        function generateCard(title, className, data, fullR, tacR) {
+            if (!data) {
+                return `
+                <div class="stat-card ${className}">
+                    <div class="card-header">${title}</div>
+                    <div class="missing-msg">Missing Damage Input</div>
+                </div>`;
+            }
+
+            // TTK Section Construction
+            let ttkHTML = '';
+            if (!data.needsReload) {
+                ttkHTML = `
+                <div class="data-row">
+                    <span class="data-label">TTK</span>
+                    <span class="data-val highlight">${fmtTime(data.ttkNoReload)}</span>
+                </div>`;
+            } else {
+                // Check if reloads exist
+                let fullStr = fullR ? fmtTime(data.ttkFull) : '<span style="color:#f87171">N/A</span>';
+                let tacStr = tacR ? fmtTime(data.ttkTac) : '<span style="color:#f87171">N/A</span>';
+
+                ttkHTML = `
+                <div class="data-row">
+                    <span class="data-label">Reloads Needed</span>
+                    <span class="data-val" style="color:#f87171">${data.reloads}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">TTK (Full Reload)</span>
+                    <div style="text-align:right">
+                        <span class="data-val">${fullStr}</span>
+                    </div>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">TTK (Tac Reload)</span>
+                    <div style="text-align:right">
+                        <span class="data-val">${tacStr}</span>
+                    </div>
+                </div>`;
+            }
+
+            // DPS Section Construction
+            let susFullStr = fullR ? fmt(data.dpsSusFull) : '-';
+            let susTacStr = tacR ? fmt(data.dpsSusTac) : '-';
+
+            return `
+            <div class="stat-card ${className}">
+                <div class="card-header">
+                    ${title}
+                    <span style="font-size:0.75rem; opacity:0.7">${data.shots} Shots</span>
+                </div>
+                <div class="card-body">
+                    ${ttkHTML}
+                    
+                    <div style="margin: 15px 0; border-bottom:1px solid rgba(255,255,255,0.1)"></div>
+
+                    <div class="data-row">
+                        <span class="data-label">Damage / Mag</span>
+                        <span class="data-val">${data.dpm}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Burst DPS <br><span class="data-sub">(No Reload)</span></span>
+                        <span class="data-val">${fmt(data.dpsBurst)}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Sustained DPS <br><span class="data-sub">(Full / Tac)</span></span>
+                        <span class="data-val">${susFullStr} <span style="color:#666">/</span> ${susTacStr}</span>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function calculateAll() {
+            // Inputs
+            let h = parseFloat(document.getElementById('health').value);
+            let mag = parseFloat(document.getElementById('magsize').value);
+            let rpm = parseFloat(document.getElementById('rpm').value);
+            let fullR = parseFloat(document.getElementById('fullReload').value);
+            let tacR = parseFloat(document.getElementById('tacReload').value);
+
+            let dHead = parseFloat(document.getElementById('headDamage').value);
+            let dBody = parseFloat(document.getElementById('bodyDamage').value);
+            let dLimb = parseFloat(document.getElementById('limbDamage').value);
+
+            let errorBox = document.getElementById('globalError');
+            let outputDiv = document.getElementById('output');
+
+            // Validation
+            if (!h || !mag || !rpm) {
+                errorBox.style.display = 'block';
+                errorBox.innerText = "Please enter Health, RPM, and Magazine Size.";
+                outputDiv.style.display = 'none';
+                return;
+            }
+            errorBox.style.display = 'none';
+
+            // Calculations
+            let headData = calculateMetrics(h, dHead, mag, rpm, fullR, tacR);
+            let bodyData = calculateMetrics(h, dBody, mag, rpm, fullR, tacR);
+            let limbData = calculateMetrics(h, dLimb, mag, rpm, fullR, tacR);
+
+            // Render
+            outputDiv.style.display = 'grid';
+            outputDiv.innerHTML = `
+                ${generateCard('Headshot', 'head', headData, fullR, tacR)}
+                ${generateCard('Bodyshot', 'body', bodyData, fullR, tacR)}
+                ${generateCard('Limbshot', 'limb', limbData, fullR, tacR)}
+            `;
+        }
+    </script>
+</body>
+</html>
